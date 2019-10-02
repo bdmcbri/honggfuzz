@@ -490,19 +490,37 @@ void subproc_checkTermination(run_t* run) {
 bool subproc_runThread(
     honggfuzz_t* hfuzz, pthread_t* thread, void* (*thread_func)(void*), bool joinable) {
     pthread_attr_t attr;
+    memset(&attr, 0, sizeof(attr));
+    bool ret = true;
 
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(
-        &attr, joinable ? PTHREAD_CREATE_JOINABLE : PTHREAD_CREATE_DETACHED);
-    pthread_attr_setstacksize(&attr, _HF_PTHREAD_STACKSIZE);
-    pthread_attr_setguardsize(&attr, (size_t)sysconf(_SC_PAGESIZE));
-
-    if (pthread_create(thread, &attr, thread_func, (void*)hfuzz) < 0) {
-        PLOG_W("Couldn't create a new thread");
+    if (pthread_attr_init(&attr)) {
+        PLOG_W("Couldn't initialize pthread_attr");
         return false;
     }
 
-    pthread_attr_destroy(&attr);
+    if (pthread_attr_setdetachstate(
+        &attr, joinable ? PTHREAD_CREATE_JOINABLE : PTHREAD_CREATE_DETACHED)) {
+        PLOG_W("Couldn't setdetachstate");
+        ret = false;
+        goto cleanup_attr;
+    }
+    if (pthread_attr_setstacksize(&attr, _HF_PTHREAD_STACKSIZE)) {
+        PLOG_W("Couldn't setstacksize");
+        ret = false;
+        goto cleanup_attr;
+    }
+    if (pthread_attr_setguardsize(&attr, (size_t)sysconf(_SC_PAGESIZE))) {
+        PLOG_W("Couldn't setguardsize");
+        ret = false;
+        goto cleanup_attr;
+    }
 
-    return true;
+    if (pthread_create(thread, NULL, thread_func, (void*)hfuzz)) {
+        PLOG_W("Couldn't create a new thread");
+        ret = false;
+    }
+
+cleanup_attr:
+    pthread_attr_destroy(&attr);
+    return ret;
 }
