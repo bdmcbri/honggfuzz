@@ -290,6 +290,21 @@ void __sanitizer_cov_trace_div4(uint32_t Val) {
 }
 
 /*
+ * -fsanitize-coverage=trace-gep
+ */
+ATTRIBUTE_X86_REQUIRE_SSE42 void __sanitizer_cov_trace_gep(uintptr_t Idx) {
+    uintptr_t pos = (uintptr_t)__builtin_return_address(0) % _HF_PERF_BITMAP_SIZE_16M;
+    //register uint8_t v = ((sizeof(Idx) * 8) - __builtin_popcountll(Idx));
+    //register uint8_t v = ((sizeof(Idx) * 8) - __builtin_clzll(Idx));
+    register uint8_t v =  (((sizeof(Idx) * 8) - __builtin_popcountll(Idx))) + (64 + ((sizeof(Idx) * 8) - __builtin_clzll(Idx)));
+    uint8_t prev = ATOMIC_GET(feedback->bbMapCmp[pos]);
+    if (prev < v) {
+        ATOMIC_SET(feedback->bbMapCmp[pos], v);
+        ATOMIC_POST_ADD(feedback->pidFeedbackCmp[my_thread_no], v - prev);
+    }
+}
+
+/*
  * -fsanitize-coverage=indirect-calls
  */
 ATTRIBUTE_X86_REQUIRE_SSE42 void __sanitizer_cov_trace_pc_indir(uintptr_t callee) {
